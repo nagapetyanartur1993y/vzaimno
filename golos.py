@@ -4,7 +4,6 @@
 «Завершить». Участники голосуют по общей ссылке и видят итог после своего голоса.
 """
 
-import io
 import secrets
 
 import segno
@@ -20,10 +19,13 @@ EXAMPLE_OPTIONS = "Кино\nБоулинг\nКвест\nПарк"
 
 
 @st.cache_data
-def qr_png(link):
-    buffer = io.BytesIO()
-    segno.make(link, error="m").save(buffer, kind="png", scale=10, border=2)
-    return buffer.getvalue()
+def qr_svg(link):
+    """QR-код в SVG: st.image встроит его в страницу как data-URI.
+
+    Не PNG: однобитный PNG Streamlit перекодирует в JPEG, и на Streamlit Cloud
+    такая картинка не грузится. Белый фон — чтобы камера считала код и на тёмной теме.
+    """
+    return segno.make(link, error="m").svg_inline(border=2, dark="#000", light="#fff", omitsize=True)
 
 
 def main():
@@ -97,7 +99,7 @@ def host_view(poll, admin_key):
     link = share_url(PAGE, poll=poll["code"])
     with st.container(border=True):
         st.markdown("**📲 Наведи камеру телефона и голосуй**")
-        st.image(qr_png(link), width=260)
+        st.image(qr_svg(link), width=260)
         st.code(link, language=None, wrap_lines=True)
         st.caption(f"Или открой сервис и введи код **{poll['code']}**.")
 
