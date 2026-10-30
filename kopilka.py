@@ -79,7 +79,8 @@ def plan(price, have, weekly, today):
         if amount <= have:
             when = "уже есть ✅"
         else:
-            when = day_label(today + timedelta(weeks=math.ceil((amount - have) / weekly)), weekday=False)
+            weeks = math.ceil((amount - have) / weekly)
+            when = day_label(today + timedelta(weeks=weeks), weekday=False)
         rows.append(f"| {label} | {money(amount)} | {when} |")
     st.markdown("**План по неделям**")
     st.markdown("\n".join(rows))
