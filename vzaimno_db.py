@@ -11,7 +11,7 @@ from contextlib import closing, contextmanager
 from datetime import datetime, timezone
 from pathlib import Path
 
-DB_PATH = os.environ.get("VZAIMNO_DB") or str(Path(__file__).with_name("data.db"))
+DB_PATH = os.environ.get("VZAIMNO_DB") or str(Path(__file__).with_name("vzaimno.db"))
 
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS pairs (

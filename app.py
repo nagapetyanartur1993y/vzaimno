@@ -1,152 +1,69 @@
-"""«Взаимно?» — тайный вопрос на двоих.
+"""«Банк мини-сервисов» — каталог маленьких готовых сервисов в одном приложении.
 
-Двое отвечают «да» или «нет», каждый по своей ссылке. Итог «да» — только если
-оба сказали «да»; ответивший «нет» так и не узнает ответ партнёра.
+Каждый мини-сервис — это страница с функцией main() и константой PAGE
+(kogda.py, golos.py, …) и, если ему нужно что-то хранить, её хранилище
+(kogda_db.py, golos_db.py, …). Чтобы добавить новый, допиши строку в CATALOG.
 """
-
-import os
-import re
 
 import streamlit as st
 
-import storage
+import dogovorilis
+import golos
+import kogda
+import konvert
+import kopilka
+import trener
+import vzaimno
 
-st.set_page_config(page_title="Взаимно?", page_icon="💌")
+st.set_page_config(page_title="Банк мини-сервисов", page_icon="🧰")
 
-DEFAULT_QUESTION = "Хочешь, чтобы наши отношения продолжались?"
-
-RULES = """
-- Вы с партнёром отвечаете «да» или «нет» — каждый по своей ссылке, не видя ответа другого.
-- Итог появится, когда ответите оба. Изменить ответ нельзя.
-- Оба «да» — обоим приходит «да» 💚
-- Хотя бы одно «нет» — обоим приходит «нет».
-- Если ты ответишь «нет», ты не узнаешь, что ответил партнёр.
-- Если ты ответишь «да», а итог «нет» — значит, против партнёр. Но твоё «да» останется тайной.
-- Как только итог готов, сами ответы стираются — хранится только итог.
-"""
-
-
-def md(text):
-    """Экранирует разметку: «**», «$» или «[…](…)» в тексте не должны ничего ломать."""
-    return re.sub(r"([\\`*_{}\[\]()#+\-.!|<>~$:])", r"\\\1", text)
-
-
-def app_url():
-    """Публичный адрес приложения — из него собираются ссылки для двоих."""
-    url = os.environ.get("PUBLIC_URL") or st.context.url or "http://localhost:8501/"
-    # Streamlit Cloud показывает приложение во фрейме по адресу …/~/+/, партнёру нужна обычная ссылка.
-    return url.split("/~/+")[0].rstrip("/") + "/"
-
-
-def go_home():
-    st.query_params.clear()
-
-
-def home_page():
-    st.title("💌 Взаимно?")
-    st.caption("Спросить друг друга о главном так, чтобы никому не было неловко.")
-    st.markdown(RULES)
-    with st.form("new_pair"):
-        question = st.text_input(
-            "Вопрос",
-            value=DEFAULT_QUESTION,
-            max_chars=120,
-            help="Подойдёт любой вопрос, на который отвечают «да» или «нет».",
-        )
-        left, right = st.columns(2)
-        name_a = left.text_input("Твоё имя", max_chars=30)
-        name_b = right.text_input("Имя партнёра", max_chars=30)
-        submitted = st.form_submit_button("Создать вопрос", type="primary", width="stretch")
-    if submitted:
-        if not question.strip():
-            st.warning("Напиши вопрос.")
-            return
-        pair = storage.create_pair(question.strip(), name_a.strip(), name_b.strip())
-        st.query_params.from_dict({"id": pair["id"], "key": pair["key_a"]})
-        st.rerun()
+ALL = "Все"
+# Раздел, модуль, название, иконка, что делает.
+CATALOG = [
+    ("Учёба", trener, "Тренажёр к экзамену", "📚",
+     "Вопросы по одному, счёт и разбор ошибок. Готовые наборы или свои вопросы."),
+    ("Учёба", golos, "Голосовалка", "🗳️",
+     "Вопрос на экране, голоса с телефонов по QR-коду, итог обновляется сам."),
+    ("Деньги", kopilka, "Копилка", "💰",
+     "Когда накоплю на цель — или сколько откладывать в неделю, чтобы успеть к дате."),
+    ("Компания", kogda, "Когда гуляем?", "🚶",
+     "Каждый отмечает свободные часы на неделе — сервис находит время, которое подходит большинству."),
+    ("Компания", dogovorilis, "Договорились", "🤝",
+     "Когда, где и чем займёмся: каждый предлагает варианты, все голосуют."),
+    ("Тайные решения", vzaimno, "Взаимно?", "💌",
+     "Тайный вопрос на двоих: «да» узнают, только если оба сказали «да»."),
+    ("Тайные решения", konvert, "Конверт", "✉️",
+     "Группа тайно кладёт ответы в конверт, а открывается только итог: порог, совпадения или общая картина."),
+]
+PAGES = {module.PAGE: st.Page(module.main, title=title, icon=icon, url_path=module.PAGE)
+         for _, module, title, icon, _ in CATALOG}
+SECTIONS = list(dict.fromkeys(section for section, *_ in CATALOG))
 
 
-def pair_page(pair_id, key):
-    pair = storage.get_pair(pair_id)
-    role = storage.pair_role(pair, key) if pair else None
-    if role is None:
-        st.error("Ссылка не работает. Проверь, что она скопирована целиком, — или данные обнулились после перезапуска сервиса.")
-        st.button("💌 Задать свой вопрос", on_click=go_home)
-        return
-    partner = "b" if role == "a" else "a"
-
-    st.title("💌 Взаимно?")
-    if pair["name_a"] and pair["name_b"]:
-        st.caption(f"{md(pair['name_a'])} и {md(pair['name_b'])}")  # без «для»: имена не склоняем
-    st.subheader(md(pair["question"]))
-
-    if pair["result"] is not None:
-        show_result(pair_id, pair["result"])
-    else:
-        if role == "a":
-            share_links(pair)
-        if pair[f"answered_{role}"]:
-            wait_for_result(pair_id)
-        else:
-            partner_name = md(pair[f"name_{partner}"]) or "Партнёр"
-            status = "ответ уже есть ✅" if pair[f"answered_{partner}"] else "ответа пока нет"
-            st.caption(f"{partner_name}: {status}")
-            answer_form(pair_id, role)
-
-    with st.expander("Как это работает"):
-        st.markdown(RULES)
-    st.button("💌 Задать свой вопрос", on_click=go_home)
+def home():
+    st.title("🧰 Банк мини-сервисов")
+    st.caption("Выбери сервис и пользуйся — всё работает прямо в браузере, с телефона тоже.")
+    section = st.pills("Раздел", [ALL, *SECTIONS], default=ALL, required=True,
+                       label_visibility="collapsed")
+    shown = [item for item in CATALOG if section in (ALL, item[0])]
+    for row in range(0, len(shown), 2):
+        for column, (sec, module, title, icon, about) in zip(st.columns(2), shown[row:row + 2]):
+            with column.container(border=True, height="stretch"):
+                st.markdown(f"#### {icon} {title}")
+                st.caption(sec)
+                st.write(about)
+                if st.button("Открыть", key=f"open_{module.PAGE}", type="primary", width="stretch"):
+                    st.switch_page(PAGES[module.PAGE])
 
 
-def share_links(pair):
-    base = f"{app_url()}?id={pair['id']}&key="
-    with st.container(border=True):
-        st.markdown("**Ссылка для партнёра** — отправь её партнёру, и больше никому:")
-        st.code(base + pair["key_b"], language=None, wrap_lines=True)
-        st.markdown("**Твоя ссылка** — сохрани, чтобы вернуться к итогу:")
-        st.code(base + pair["key_a"], language=None, wrap_lines=True)
+HOME = st.Page(home, title="Все сервисы", icon="🧰", default=True)
+page = st.navigation(
+    {"": [HOME], **{s: [PAGES[m.PAGE] for sec, m, *_ in CATALOG if sec == s] for s in SECTIONS}}
+)
+if page is not HOME:
+    st.page_link(HOME, label="Все сервисы", icon=":material/arrow_back:")
+page.run()
 
-
-def answer_form(pair_id, role):
-    with st.form("answer"):
-        choice = st.radio("Твой ответ", ["Да", "Нет"], index=None, horizontal=True)
-        submitted = st.form_submit_button(
-            "Ответить — изменить будет нельзя", type="primary", width="stretch"
-        )
-    if submitted:
-        if choice is None:
-            st.warning("Выбери «да» или «нет».")
-            return
-        storage.answer_pair(pair_id, role, choice == "Да")
-        st.rerun()
-
-
-@st.fragment(run_every=3)
-def wait_for_result(pair_id):
-    pair = storage.get_pair(pair_id)
-    if pair is None or pair["result"] is not None:
-        st.rerun()
-    st.info("⏳ Ответ сохранён. Ждём второго — итог появится здесь сам.")
-    st.caption("Это не твой ответ? Значит, по твоей ссылке ответил кто-то другой.")
-
-
-def show_result(pair_id, result):
-    # Текст одинаковый для обоих: по нему нельзя понять, кто что ответил.
-    if result:
-        st.success("💚 Вы оба ответили «да»!")
-        if not st.session_state.get(f"celebrated_{pair_id}"):
-            st.session_state[f"celebrated_{pair_id}"] = True
-            st.balloons()
-    else:
-        st.info("Итог: «нет». Хотя бы один из вас ответил «нет».")
-        st.markdown(
-            "Если твой ответ был «да» — значит, «нет» сказал партнёр, а твоё «да» останется тайной.\n\n"
-            "Если твой ответ был «нет» — ответ партнёра ты не узнаешь."
-        )
-
-
-pair_id = st.query_params.get("id")
-if pair_id:
-    pair_page(pair_id, st.query_params.get("key", ""))
-else:
-    home_page()
+# В самом конце, чтобы всплывашка не сдвигала элементы выше.
+if "flash" in st.session_state:
+    st.toast(st.session_state.pop("flash"))
